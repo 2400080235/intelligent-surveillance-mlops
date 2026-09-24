@@ -1,0 +1,24 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# YOLO model files
+*.pt
+
+# MLflow
+mlruns/
+
+# DVC cache
+.dvc/cache/
+
+# Generated outputs
+outputs/
+
+# IDE files
+.idea/
+
+# Python environment files
+.env
