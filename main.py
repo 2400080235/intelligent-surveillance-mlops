@@ -27,8 +27,8 @@ while True:
     # Draw detection boxes
     annotated_frame = results[0].plot()
 
-    # Show the video
-    cv2.imshow("Real-Time Video Analytics", annotated_frame)
+    # Show the surveillance video
+    cv2.imshow("Intelligent Surveillance System", annotated_frame)
 
     # Press Q to exit
     if cv2.waitKey(1) & 0xFF == ord("q"):
