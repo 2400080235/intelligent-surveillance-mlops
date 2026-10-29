@@ -1,0 +1,24 @@
+﻿name: Python CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  check-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q app.py log_existing_results.py train_validate.py video_detection.py main.py data_drift.py docker_video.py mlflow_tracking.py mlflow_yolo.py
