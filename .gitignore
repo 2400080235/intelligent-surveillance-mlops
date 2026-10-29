@@ -22,3 +22,15 @@ outputs/
 
 # Python environment files
 .env
+# MLflow local database and artifacts
+mlflow.db
+mlartifacts/
+
+# Generated training and upload files
+runs/
+uploads/
+review_backup/
+data/training_demo/
+
+
+data/video/surveillance2.mp4

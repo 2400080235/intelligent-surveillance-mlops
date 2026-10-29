@@ -1,0 +1,423 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Surveillance Dashboard</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #0b1120;
+            color: #e5e7eb;
+        }
+
+        header {
+            background: #111c33;
+            padding: 24px 5%;
+            border-bottom: 1px solid #263550;
+        }
+
+        header h1 {
+            margin: 0;
+            color: #60a5fa;
+            font-size: 28px;
+        }
+
+        header p {
+            margin: 8px 0 0;
+            color: #aab8cf;
+        }
+
+        main {
+            width: 90%;
+            max-width: 1200px;
+            margin: 28px auto;
+        }
+
+        .panel {
+            background: #131e32;
+            border: 1px solid #263550;
+            border-radius: 14px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #f1f5f9;
+            font-size: 21px;
+        }
+
+        .muted {
+            color: #aab8cf;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .upload-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: center;
+        }
+
+        input[type="file"] {
+            flex: 1;
+            min-width: 220px;
+            padding: 12px;
+            border: 1px solid #40516d;
+            border-radius: 8px;
+            background: #0b1120;
+            color: #e5e7eb;
+        }
+
+        button {
+            padding: 13px 22px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background: #0b1120;
+            border: 1px solid #263550;
+            border-radius: 12px;
+        }
+
+        .stat-label {
+            color: #aab8cf;
+            font-size: 14px;
+        }
+
+        .stat-value {
+            margin-top: 10px;
+            color: #60a5fa;
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            max-height: 650px;
+            margin-top: 18px;
+            background: #05070c;
+            border-radius: 10px;
+        }
+
+        .video-link {
+            display: inline-block;
+            margin-top: 14px;
+            color: #60a5fa;
+            overflow-wrap: anywhere;
+        }
+
+        .video-link:hover {
+            color: #93c5fd;
+        }
+
+        .object-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 14px;
+        }
+
+        .object-item {
+            padding: 18px;
+            background: #0b1120;
+            border: 1px solid #263550;
+            border-radius: 10px;
+        }
+
+        .object-name {
+            color: #cbd5e1;
+            text-transform: capitalize;
+            font-size: 15px;
+        }
+
+        .object-count {
+            color: #34d399;
+            font-size: 27px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .error {
+            padding: 14px;
+            margin-top: 14px;
+            color: #fecaca;
+            background: #451a1a;
+            border: 1px solid #7f1d1d;
+            border-radius: 8px;
+        }
+
+        .success {
+            color: #86efac;
+        }
+
+        footer {
+            padding: 20px;
+            text-align: center;
+            color: #8291a9;
+            font-size: 13px;
+        }
+
+        @media (max-width: 600px) {
+            main {
+                width: 94%;
+                margin-top: 18px;
+            }
+
+            .panel {
+                padding: 16px;
+            }
+
+            header h1 {
+                font-size: 23px;
+            }
+
+            .upload-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            input[type="file"],
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Intelligent Surveillance Dashboard</h1>
+    <p>Real-Time Video Analytics with MLOps</p>
+</header>
+
+<main>
+
+    <section class="panel">
+        <h2>Upload Surveillance Video</h2>
+
+        <p class="muted">
+            Upload a video to detect and classify objects such as cars,
+            buses, trucks, motorcycles, and people.
+        </p>
+
+        <form
+            class="upload-form"
+            id="upload-form"
+            action="{{ url_for('index') }}"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+            <input
+                type="file"
+                id="video-upload"
+                name="video"
+                accept="video/*,.mp4,.avi,.mov,.mkv"
+                required
+            >
+
+            <button type="submit" id="process-button">
+                Process Video
+            </button>
+        </form>
+
+        <p class="muted" id="upload-status">
+            Select a video file to begin.
+        </p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+    </section>
+
+    {% if result %}
+
+    <section class="panel">
+        <h2>Detection Overview</h2>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Frames Processed</div>
+                <div class="stat-value">{{ result.frames }}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Total Detections</div>
+                <div class="stat-value">{{ result.total_detections }}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">Object Categories</div>
+                <div class="stat-value">{{ result.objects|length }}</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Processed Surveillance Video</h2>
+
+        <p class="muted">
+            Uploaded file: {{ result.original_name }}
+        </p>
+
+        <video
+            id="processed-video"
+            controls
+            playsinline
+            preload="auto"
+        >
+            <source
+                src="{{ url_for('output_video', filename=result.video) }}"
+                type="video/mp4"
+            >
+            Your browser does not support HTML video playback.
+        </video>
+
+        <p id="video-status" class="muted">
+            Loading the processed video...
+        </p>
+
+        <a
+            class="video-link"
+            href="{{ url_for('output_video', filename=result.video) }}"
+            target="_blank"
+            rel="noopener"
+        >Open processed video separately</a>
+    </section>
+
+    <section class="panel">
+        <h2>Detected Object Summary</h2>
+
+        {% if result.objects %}
+        <div class="object-list">
+            {% for name, count in result.objects.items() %}
+            <div class="object-item">
+                <div class="object-name">{{ name }}</div>
+                <div class="object-count">{{ count }}</div>
+                <div class="muted">Detections across frames</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted">No objects were detected in this video.</p>
+        {% endif %}
+    </section>
+
+    {% endif %}
+
+</main>
+
+<footer>
+    Real-Time Video Analytics with MLOps | Intelligent Surveillance System
+</footer>
+
+<script>
+    const uploadForm = document.getElementById("upload-form");
+    const uploadInput = document.getElementById("video-upload");
+    const uploadStatus = document.getElementById("upload-status");
+    const processButton = document.getElementById("process-button");
+
+    const video = document.getElementById("processed-video");
+    const videoStatus = document.getElementById("video-status");
+
+    if (uploadInput) {
+        uploadInput.addEventListener("change", function () {
+            if (uploadInput.files.length > 0) {
+                uploadStatus.textContent =
+                    "Selected file: " + uploadInput.files[0].name;
+            }
+        });
+    }
+
+    if (uploadForm) {
+        uploadForm.addEventListener("submit", function () {
+            if (processButton) {
+                processButton.disabled = true;
+                processButton.textContent = "Processing...";
+            }
+
+            if (uploadStatus) {
+                uploadStatus.textContent =
+                    "Processing video and preparing browser-compatible playback. Please wait.";
+            }
+        });
+    }
+
+    if (video && videoStatus) {
+        video.addEventListener("loadedmetadata", function () {
+            videoStatus.textContent =
+                "Video loaded successfully. Duration: " +
+                video.duration.toFixed(2) + " seconds.";
+        });
+
+        video.addEventListener("canplay", function () {
+            videoStatus.textContent =
+                "Video is ready to play. Click the play button.";
+        });
+
+        video.addEventListener("playing", function () {
+            videoStatus.textContent =
+                "Video is playing successfully.";
+            videoStatus.classList.add("success");
+        });
+
+        video.addEventListener("waiting", function () {
+            videoStatus.textContent =
+                "Buffering video. Please wait...";
+        });
+
+        video.addEventListener("error", function () {
+            const mediaError = video.error;
+            let message = "The video could not be played.";
+
+            if (mediaError) {
+                message += " Error code: " + mediaError.code + ".";
+            }
+
+            videoStatus.textContent =
+                message + " Try opening the video separately below.";
+        });
+
+        video.addEventListener("stalled", function () {
+            videoStatus.textContent =
+                "Video loading has stalled. Check your connection and try again.";
+        });
+    }
+</script>
+
+</body>
+</html>
+```
