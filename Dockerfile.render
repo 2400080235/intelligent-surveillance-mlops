@@ -1,0 +1,28 @@
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libgl1 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-render.txt .
+
+RUN pip install --no-cache-dir --default-timeout=300 --retries=10 -r requirements-render.txt
+
+COPY app.py .
+COPY templates/ ./templates/
+
+COPY runs/train/surveillance_demo/weights/best.pt runs/train/surveillance_demo/weights/best.pt
+
+RUN mkdir -p uploads outputs
+
+EXPOSE 10000
+
+CMD ["python", "app.py"]

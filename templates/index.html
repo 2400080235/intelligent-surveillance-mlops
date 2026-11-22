@@ -1,4 +1,4 @@
-```html
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -170,6 +170,40 @@
             margin: 10px 0;
         }
 
+        .history-card {
+            padding: 20px;
+            margin-top: 18px;
+            background: #0b1120;
+            border: 1px solid #263550;
+            border-radius: 12px;
+        }
+
+        .history-card h3 {
+            margin-top: 0;
+            color: #60a5fa;
+            overflow-wrap: anywhere;
+        }
+
+        .history-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .history-stat {
+            padding: 12px;
+            background: #131e32;
+            border-radius: 8px;
+        }
+
+        .history-stat strong {
+            display: block;
+            color: #34d399;
+            font-size: 20px;
+            margin-top: 6px;
+        }
+
         .error {
             padding: 14px;
             margin-top: 14px;
@@ -226,6 +260,7 @@
 
 <main>
 
+    <!-- VIDEO UPLOAD -->
     <section class="panel">
         <h2>Upload Surveillance Video</h2>
 
@@ -245,7 +280,7 @@
                 type="file"
                 id="video-upload"
                 name="video"
-                accept="video/*,.mp4,.avi,.mov,.mkv"
+                accept="video/*,.mp4,.avi,.mov,.mkv,.webm"
                 required
             >
 
@@ -263,6 +298,8 @@
         {% endif %}
     </section>
 
+
+    <!-- LATEST VIDEO RESULTS -->
     {% if result %}
 
     <section class="panel">
@@ -287,7 +324,7 @@
     </section>
 
     <section class="panel">
-        <h2>Processed Surveillance Video</h2>
+        <h2>Latest Processed Surveillance Video</h2>
 
         <p class="muted">
             Uploaded file: {{ result.original_name }}
@@ -337,6 +374,95 @@
     </section>
 
     {% endif %}
+
+
+    <!-- VIDEO PROCESSING HISTORY -->
+    <section class="panel">
+        <h2>Video Processing History</h2>
+
+        <p class="muted">
+            All successfully processed surveillance videos are saved here.
+            You can replay previously processed videos at any time.
+        </p>
+
+        {% if history %}
+
+            <p class="muted">
+                Total videos processed: {{ history|length }}
+            </p>
+
+            {% for item in history %}
+
+            <div class="history-card">
+
+                <h3>{{ loop.index }}. {{ item.original_name }}</h3>
+
+                <p class="muted">
+                    Processed on: {{ item.processed_at }}
+                </p>
+
+                <div class="history-stats">
+
+                    <div class="history-stat">
+                        <span class="muted">Frames Processed</span>
+                        <strong>{{ item.frames }}</strong>
+                    </div>
+
+                    <div class="history-stat">
+                        <span class="muted">Total Detections</span>
+                        <strong>{{ item.total_detections }}</strong>
+                    </div>
+
+                    <div class="history-stat">
+                        <span class="muted">Object Categories</span>
+                        <strong>{{ item.objects|length }}</strong>
+                    </div>
+
+                </div>
+
+                <video controls playsinline preload="none">
+                    <source
+                        src="{{ url_for('output_video', filename=item.video) }}"
+                        type="video/mp4"
+                    >
+                    Your browser does not support video playback.
+                </video>
+
+                <a
+                    class="video-link"
+                    href="{{ url_for('output_video', filename=item.video) }}"
+                    target="_blank"
+                    rel="noopener"
+                >
+                    Open this processed video separately
+                </a>
+
+                {% if item.objects %}
+                <p class="muted">Detected objects:</p>
+
+                <div class="object-list">
+                    {% for name, count in item.objects.items() %}
+                    <div class="object-item">
+                        <div class="object-name">{{ name }}</div>
+                        <div class="object-count">{{ count }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p class="muted">
+                No video history available yet.
+                Upload and process a video to see it here.
+            </p>
+
+        {% endif %}
+    </section>
 
 </main>
 
@@ -420,4 +546,3 @@
 
 </body>
 </html>
-```

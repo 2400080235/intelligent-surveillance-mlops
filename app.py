@@ -1,13 +1,31 @@
 
 from pathlib import Path
+from datetime import datetime
+import json
+import os
 import subprocess
 import uuid
 
 import cv2
 import imageio_ffmpeg
-from flask import Flask, render_template, request, send_from_directory
+
+from flask import (
+    Flask,
+    render_template,
+    request,
+    send_from_directory,
+    Response,
+)
+
 from werkzeug.utils import secure_filename
 from ultralytics import YOLO
+
+from prometheus_client import (
+    Counter,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 
 
 # --------------------------------------------------
@@ -17,16 +35,13 @@ from ultralytics import YOLO
 BASE_DIR = Path(__file__).resolve().parent
 
 MODEL_PATH = (
-    BASE_DIR
-    / "runs"
-    / "train"
-    / "surveillance_demo"
-    / "weights"
-    / "best.pt"
+    BASE_DIR / "runs" / "train" / "surveillance_demo"
+    / "weights" / "best.pt"
 )
 
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "outputs"
+HISTORY_FILE = BASE_DIR / "video_history.json"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,7 +53,74 @@ app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
 
 
 # --------------------------------------------------
-# 2. LOAD TRAINED YOLO MODEL
+# 2. PROMETHEUS MONITORING METRICS
+# --------------------------------------------------
+
+VIDEO_UPLOADS = Counter(
+    "surveillance_video_uploads_total",
+    "Total number of uploaded videos"
+)
+
+VIDEOS_PROCESSED = Counter(
+    "surveillance_videos_processed_total",
+    "Total number of successfully processed videos"
+)
+
+DETECTIONS_TOTAL = Counter(
+    "surveillance_detections_total",
+    "Total number of objects detected across processed video frames"
+)
+
+PROCESSING_ERRORS = Counter(
+    "surveillance_processing_errors_total",
+    "Total number of video processing errors"
+)
+
+LAST_VIDEO_FRAMES = Gauge(
+    "surveillance_last_video_frames",
+    "Number of frames in the most recently processed video"
+)
+
+LAST_PROCESSING_STATUS = Gauge(
+    "surveillance_last_processing_success",
+    "1 if the latest processing attempt succeeded, otherwise 0"
+)
+
+
+# --------------------------------------------------
+# 3. LOAD AND SAVE VIDEO HISTORY
+# --------------------------------------------------
+
+def load_video_history():
+    if not HISTORY_FILE.exists():
+        return []
+
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as file:
+            history = json.load(file)
+
+        if isinstance(history, list):
+            return history
+
+        app.logger.error("Video history file has an invalid format.")
+        return []
+
+    except (json.JSONDecodeError, OSError):
+        app.logger.exception("Could not read video history.")
+        return []
+
+
+def save_video_history(history):
+    temporary_file = HISTORY_FILE.with_suffix(".tmp")
+
+    with open(temporary_file, "w", encoding="utf-8") as file:
+        json.dump(history, file, indent=4)
+
+    temporary_file.replace(HISTORY_FILE)
+
+
+# --------------------------------------------------
+# 4. LOAD TRAINED YOLO MODEL
 # --------------------------------------------------
 
 print("Loading trained YOLO model...")
@@ -54,7 +136,7 @@ print("YOLO model loaded successfully!")
 
 
 # --------------------------------------------------
-# 3. CHECK VIDEO FILE TYPE
+# 5. CHECK VIDEO FILE TYPE
 # --------------------------------------------------
 
 def allowed_file(filename):
@@ -66,7 +148,7 @@ def allowed_file(filename):
 
 
 # --------------------------------------------------
-# 4. PROCESS VIDEO USING YOLO
+# 6. PROCESS VIDEO USING YOLO
 # --------------------------------------------------
 
 def process_video(input_path, output_path):
@@ -111,7 +193,6 @@ def process_video(input_path, output_path):
             if not success:
                 break
 
-            # Run YOLO object detection.
             predictions = model.predict(
                 frame,
                 conf=0.25,
@@ -119,21 +200,17 @@ def process_video(input_path, output_path):
             )
 
             prediction = predictions[0]
-
-            # Draw boxes and labels on the frame.
             annotated_frame = prediction.plot()
 
             writer.write(annotated_frame)
-
             frames += 1
 
-            # Count detections across frames.
             if prediction.boxes is not None:
                 for class_id in prediction.boxes.cls.tolist():
                     class_id = int(class_id)
+
                     class_name = model.names.get(
-                        class_id,
-                        str(class_id),
+                        class_id, str(class_id)
                     )
 
                     objects[class_name] = (
@@ -161,7 +238,7 @@ def process_video(input_path, output_path):
 
 
 # --------------------------------------------------
-# 5. CONVERT VIDEO TO H.264 FOR CHROME
+# 7. CONVERT VIDEO TO H.264 FOR CHROME
 # --------------------------------------------------
 
 def convert_to_h264(input_path, output_path):
@@ -199,7 +276,7 @@ def convert_to_h264(input_path, output_path):
 
 
 # --------------------------------------------------
-# 6. DASHBOARD AND VIDEO UPLOAD
+# 8. DASHBOARD AND VIDEO UPLOAD
 # --------------------------------------------------
 
 @app.route("/", methods=["GET", "POST"])
@@ -223,9 +300,7 @@ def index():
             safe_name = secure_filename(uploaded_file.filename)
             unique_id = uuid.uuid4().hex[:10]
 
-            input_path = (
-                UPLOAD_DIR / f"{unique_id}_{safe_name}"
-            )
+            input_path = UPLOAD_DIR / f"{unique_id}_{safe_name}"
 
             raw_output_path = (
                 OUTPUT_DIR / f"{unique_id}_detected.mp4"
@@ -235,20 +310,20 @@ def index():
                 OUTPUT_DIR / f"{unique_id}_detected_h264.mp4"
             )
 
+            VIDEO_UPLOADS.inc()
+            LAST_PROCESSING_STATUS.set(0)
+
             try:
-                # Save uploaded video.
                 uploaded_file.save(str(input_path))
 
                 print("\nUploaded:", safe_name)
                 print("Starting YOLO detection...")
 
-                # Process video and collect results.
                 frames, detections, objects = process_video(
                     input_path,
                     raw_output_path,
                 )
 
-                # Convert annotated video to browser-compatible MP4.
                 print("Converting video for browser playback...")
 
                 convert_to_h264(
@@ -256,31 +331,65 @@ def index():
                     h264_output_path,
                 )
 
-                # Dashboard results.
+                # Create the result record.
                 result = {
                     "video": h264_output_path.name,
                     "original_name": safe_name,
                     "frames": frames,
                     "total_detections": detections,
                     "objects": objects,
+                    "processed_at": datetime.now().strftime(
+                        "%d-%m-%Y %I:%M:%S %p"
+                    ),
                 }
+
+                # Save the successful result in persistent history.
+                history = load_video_history()
+                history.insert(0, result)
+                save_video_history(history)
+
+                # Update Prometheus metrics.
+                VIDEOS_PROCESSED.inc()
+                DETECTIONS_TOTAL.inc(detections)
+                LAST_VIDEO_FRAMES.set(frames)
+                LAST_PROCESSING_STATUS.set(1)
 
                 print("Dashboard results ready!")
                 print("Processed video:", result["video"])
+                print("Video history saved successfully!")
 
             except Exception as exc:
                 app.logger.exception("Video processing failed")
+                PROCESSING_ERRORS.inc()
+                LAST_PROCESSING_STATUS.set(0)
+                result = None
                 error = f"Video processing failed: {exc}"
+
+    # Load all previous successful video records.
+    history = load_video_history()
 
     return render_template(
         "index.html",
         result=result,
+        history=history,
         error=error,
     )
 
 
 # --------------------------------------------------
-# 7. SERVE PROCESSED VIDEO
+# 9. PROMETHEUS METRICS ENDPOINT
+# --------------------------------------------------
+
+@app.route("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype=CONTENT_TYPE_LATEST,
+    )
+
+
+# --------------------------------------------------
+# 10. SERVE PROCESSED VIDEO
 # --------------------------------------------------
 
 @app.route("/outputs/<path:filename>")
@@ -294,7 +403,7 @@ def output_video(filename):
 
 
 # --------------------------------------------------
-# 8. RUN FLASK APPLICATION
+# 11. RUN FLASK APPLICATION
 # --------------------------------------------------
 
 if __name__ == "__main__":
@@ -302,7 +411,7 @@ if __name__ == "__main__":
     print("Open http://127.0.0.1:5001 in Chrome.\n")
 
     app.run(
-        host="127.0.0.1",
-        port=5001,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5001)),
         debug=False,
     )
